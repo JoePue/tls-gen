@@ -12,3 +12,5 @@ basic/testca/openssl.cnf
 
 __pycache__
 *.pyc
+
+my-notes.md

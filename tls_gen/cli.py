@@ -1,8 +1,8 @@
 import sys
 import os
 from optparse import OptionParser
-
 import socket
+from . import app_logging as logger
 
 def build_parser():
     p = OptionParser(usage = "usage: %prog [options] (generate|clean|regenerate|verify|info)")
@@ -49,6 +49,7 @@ def print_known_commands():
     print("Known commands: {}".format(s))
 
 def ensure_password_is_provided(options):
+    logger.debug("ensure_password_is_provided()")
     if options.password is None:
         sys.stderr.write("Private key password must be specified.")
         sys.exit(1)

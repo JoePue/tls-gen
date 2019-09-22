@@ -49,3 +49,4 @@ To display client and server certificate information, use
     make info
 
 This assumes the certificates were previously generated.
+```

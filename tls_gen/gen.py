@@ -8,6 +8,7 @@ from subprocess import run
 
 from .paths import *
 
+from . import app_logging as logger
 #
 # General
 #
@@ -99,22 +100,25 @@ def prepare_ca_directory(dir_name):
 #
 # Root CA
 #
-
 def generate_root_ca(opts):
-    prepare_ca_directory(root_ca_path())
+    caKeyPem = root_ca_key_path()
+    if not os.path.isfile(caKeyPem) : 
+      prepare_ca_directory(root_ca_path())
 
-    openssl_req(opts,
-                "-x509",
-                "-days",    str(opts.validity_days),
-                "-newkey",  "rsa:{}".format(opts.key_bits),
-                "-keyout",  root_ca_key_path(),
-                "-out",     root_ca_certificate_path(),
-                "-outform", "PEM",
-                "-subj",    "/CN=TLSGenSelfSignedtRootCA/L=$$$$/",
-                "-nodes")
-    openssl_x509("-in",      root_ca_certificate_path(),
-                 "-out",     root_ca_certificate_cer_path(),
-                 "-outform", "DER")
+      openssl_req(opts,
+                  "-x509",
+                  "-days",    str(opts.validity_days),
+                  "-newkey",  "rsa:{}".format(opts.key_bits),
+                  "-keyout",  caKeyPem,
+                  "-out",     root_ca_certificate_path(),
+                  "-outform", "PEM",
+                  "-subj",    "/CN=TLSGenSelfSignedtRootCA/L=$$$$/",
+                  "-nodes")
+      openssl_x509("-in",      root_ca_certificate_path(),
+                  "-out",     root_ca_certificate_cer_path(),
+                  "-outform", "DER")
+    else:
+      print("[Info] Generate no root CA, because " + str(caKeyPem) + " already exits.")
 
 
 #
@@ -158,53 +162,88 @@ def generate_intermediate_ca(opts,
 #
 # Leaf (peer) certificate/key pairs
 #
-
 def generate_server_certificate_and_key_pair(opts, **kwargs):
     generate_leaf_certificate_and_key_pair("server", opts, **kwargs)
 
 def generate_client_certificate_and_key_pair(opts, **kwargs):
+    logger.debug("generate_client_certificate_and_key_pair()")
     generate_leaf_certificate_and_key_pair("client", opts, **kwargs)
+
+def generate_server_certificate_and_key_pair_by_cn(opts, **kwargs):
+    logger.debug("generate_server_certificate_and_key_pair_by_cn()")
+    generate_leaf_certificate_and_key_pair(opts.common_name + "_server", opts, **kwargs)
+
+def generate_client_certificate_and_key_pair_by_cn(opts, **kwargs):
+    logger.debug("generate_client_certificate_and_key_pair_by_cn()")
+    generate_leaf_certificate_and_key_pair(opts.common_name + "_client", opts, **kwargs)
 
 def generate_leaf_certificate_and_key_pair(peer, opts,
                                            parent_certificate_path = root_ca_certificate_path(),
                                            parent_key_path         = root_ca_key_path(),
                                            parent_certs_path       = root_ca_certs_path()):
-    print("Will generate leaf certificate and key pair for {}".format(peer))
-    print("Using {} for Common Name (CN)".format(opts.common_name))
+    logger.debug("generate_leaf_certificate_and_key_pair()")
+    logger.info("Will generate leaf certificate and key pair for {}".format(peer))
+    logger.info("Using {} for Common Name (CN)".format(opts.common_name))
+    logger.info("Using parent certificate path at {}".format(parent_certificate_path))
+    logger.info("Using parent key path at {}".format(parent_key_path))
 
-    print("Using parent certificate path at {}".format(parent_certificate_path))
-    print("Using parent key path at {}".format(parent_key_path))
     os.makedirs(relative_path(peer), exist_ok = True)
+    keyPem = leaf_key_path(peer)
 
     if opts.use_ecc:
-        print("Will use Elliptic Curve Cryptography...")
-        openssl_ecparam("-out", leaf_key_path(peer), "-genkey", "-name", opts.ecc_curve)
+        logger.info("Will use Elliptic Curve Cryptography...")
+        openssl_ecparam("-out", keyPem, "-genkey", "-name", opts.ecc_curve)
     else:
-        print("Will use RSA...")
-        openssl_genrsa("-out", leaf_key_path(peer), str(opts.key_bits))
+        if not os.path.isfile(keyPem): 
+          logger.info("Will use RSA...")
+          openssl_genrsa("-out", keyPem, str(opts.key_bits))
+        else:
+          logger.info("Will reuse RSA")
 
+    outPem = leaf_certificate_path(peer)
+    reqPem = relative_path(peer, "req.pem")
+    logger.debug("=== openssl_req ===")
+    logger.debug("[peer]                    " + str(peer))
+    logger.debug("[keyPem]           " + str(keyPem))
+    logger.debug("[outPem]   " + str(outPem))
+    logger.debug("[relative_path-p12]       " + str(relative_path(peer, "keycert.p12")))
+    
     openssl_req(opts,
                 "-new",
-                "-key",     leaf_key_path(peer),
-                "-keyout",  leaf_certificate_path(peer),
-                "-out",     relative_path(peer, "req.pem"),
+                "-key",     keyPem,
+                "-keyout",  outPem,
+                "-out",     reqPem,
                 "-days",    str(opts.validity_days),
                 "-outform", "PEM",
                 "-subj",    "/CN={}/O={}/L=$$$$/".format(opts.common_name, peer),
                 "-nodes")
+                
+    extensionName = "client" if (peer.endswith("client")) else "server"
+
+    logger.debug("openssl_ca")
+    logger.debug("[opts.validity_days] " + str(opts.validity_days))
+    logger.debug("[parent_certificate_path] " + str(parent_certificate_path))
+    logger.debug("[parent_key_path]         " + str(parent_key_path))
+    logger.debug("[reqPem] " + str(reqPem))
+    logger.debug("[outPem] " + str(outPem))
+    logger.debug("[parent_certs_path]       " + str(parent_certs_path))
+    logger.debug("[extensionName]       " + str(extensionName))
+    
     openssl_ca(opts,
                "-days",    str(opts.validity_days),
                "-cert",    parent_certificate_path,
                "-keyfile", parent_key_path,
-               "-in",      relative_path(peer, "req.pem"),
-               "-out",     leaf_certificate_path(peer),
+               "-in",      reqPem,
+               "-out",     outPem,
                "-outdir",  parent_certs_path,
                "-notext",
                "-batch",
-               "-extensions", "{}_extensions".format(peer))
+               "-extensions", "{}_extensions".format(extensionName))
+
+    logger.debug("run")
     run(["openssl", "pkcs12",
           "-export",
           "-out",     relative_path(peer, "keycert.p12"),
-          "-in",      leaf_certificate_path(peer),
-          "-inkey",   leaf_key_path(peer),
+          "-in",      outPem,
+          "-inkey",   keyPem,
           "-passout", "pass:{}".format(opts.password)])

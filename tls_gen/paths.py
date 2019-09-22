@@ -1,6 +1,7 @@
 import os
 from os import path
 import shutil
+from . import app_logging as logger
 
 root             = os.getcwd()
 root_ca_dir_name = "testca"
@@ -38,6 +39,8 @@ def root_ca_key_path():
 def root_ca_certificate_cer_path():
     return path.join(root, root_ca_dir_name, "cacert.cer")
 
+def root_ca_index_txt_path():
+    return path.join(root, root_ca_dir_name, "index.txt")
 #
 # Intermediate CAs
 #
@@ -81,8 +84,15 @@ def result_path():
 def result_root_ca_certificate_path():
     return path.join(root, result_dir_name, "ca_certificate.pem")
 
+def result_root_ca_certificate_path_from_src_dir():
+    return path.join(root, "testca", "cacert.pem")
+
 def result_leaf_certificate_path(peer):
     return path.join(result_path(), "{}_certificate.pem".format(peer))
+
+def result_leaf_certificate_path_from_src_dir(folderName):
+    return path.join(root, folderName, "cert.pem")
+
 
 def result_leaf_key_path(peer):
     return path.join(result_path(), "{}_key.pem".format(peer))

@@ -3,12 +3,23 @@ from subprocess import call
 import shutil
 
 from .paths import *
-
+from . import app_logging as logger
+ 
 def verify_leaf_certificate_against_root_ca(peer):
     print("Will verify {} certificate against root CA".format(peer))
-    call(["openssl", "verify",
-          "-CAfile", result_root_ca_certificate_path(),
-          result_leaf_certificate_path(peer)])
+    rootCert = result_root_ca_certificate_path()
+    leafCert = result_leaf_certificate_path(peer)
+    print("[File Root CA]   " + rootCert)
+    print("[File Leaf Cert] " + leafCert)
+    call(["openssl", "verify", "-CAfile", rootCert, leafCert])
+
+def verify_leaf_certificate_against_root_ca_by_cn(opts, peer):
+    print("Will verify {} certificate against root CA".format("testca"))
+    rootCert = result_root_ca_certificate_path_from_src_dir()
+    leafCert = result_leaf_certificate_path_from_src_dir(opts.common_name + "_" + peer)
+    print("[File Root CA]   " + rootCert)
+    print("[File Leaf Cert] " + leafCert)
+    call(["openssl", "verify", "-CAfile", rootCert, leafCert])
 
 def verify_leaf_certificate_against_ca_chain(peer):
     print("Will verify {} certificate against CA certificate chain {}".format(

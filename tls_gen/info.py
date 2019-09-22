@@ -3,6 +3,7 @@ from subprocess import call
 import shutil
 
 from .paths import *
+from . import app_logging as logger
 
 def leaf_certificate_info(peer):
     print("Will display {} certificate info\n\n".format(peer))
